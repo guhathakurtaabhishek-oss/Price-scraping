@@ -72,7 +72,7 @@ def read_input(filepath: str) -> list[dict]:
 # Per-product fetch
 # ---------------------------------------------------------------------------
 
-def fetch_product(brand_name: str, url: str,
+def fetch_product(brand_name: str, source_brand_url: str, url: str,
                   session: requests.Session) -> tuple[dict | None, str | None]:
     """
     Fetch one product page and extract data.
@@ -98,7 +98,7 @@ def fetch_product(brand_name: str, url: str,
         return None, "Blocked / CAPTCHA"
 
     try:
-        record = extract_product(brand_name, url, resp.text)
+        record = extract_product(brand_name, source_brand_url, url, resp.text)
     except Exception as exc:
         return None, f"Extraction error: {exc}"
 
@@ -163,7 +163,7 @@ def main():
         brand_fail  = 0
 
         for url in product_urls:
-            record, err = fetch_product(brand_name, url, session)
+            record, err = fetch_product(brand_name, base_url, url, session)
 
             if err:
                 logger.warning("  FAIL  %s  [%s]", url, err)
@@ -173,11 +173,13 @@ def main():
                 all_records.append(record)
                 append_record(record)  # incremental write
                 brand_ok += 1
-                logger.info("  OK    %s  |  %s  |  SP=%.0f  MRP=%.0f",
+                sp  = record["Selling Price / Final Price"]
+                mrp = record["MRP"]
+                logger.info("  OK    %s  |  %s  |  SP=%s  MRP=%s",
                             brand_name,
                             (record["Product Name"] or "")[:40],
-                            record["Selling Price"] or 0,
-                            record["MRP"] or 0)
+                            f"{sp:.0f}" if sp else "-",
+                            f"{mrp:.0f}" if mrp else "-")
 
         logger.info("Brand summary — %s: %d OK / %d failed",
                     brand_name, brand_ok, brand_fail)

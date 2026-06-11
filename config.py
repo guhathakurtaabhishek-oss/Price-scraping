@@ -52,15 +52,14 @@ HEADERS = {
 
 OUTPUT_COLUMNS = [
     "Brand Name",
-    "Product Name",
+    "Source Brand URL",
     "Product URL",
+    "Product Name",
     "MRP",
-    "Selling Price",
+    "Selling Price / Final Price",
     "Discount %",
     "Coupon Code",
     "Prepaid Offer",
     "Shipping Fee",
-    "Final Price",
-    "Stock Status",
-    "Scraped Timestamp",
+    "Availability / Stock Status",
 ]

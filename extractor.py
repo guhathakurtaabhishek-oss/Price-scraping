@@ -9,7 +9,6 @@ Priority order:
 import json
 import logging
 import re
-from datetime import datetime, timezone
 
 from bs4 import BeautifulSoup
 
@@ -78,7 +77,7 @@ def _from_json_ld(soup: BeautifulSoup) -> dict:
                 elif "outofstock" in avail or "out_of_stock" in avail:
                     result["stock"] = "Out of Stock"
                 else:
-                    result["stock"] = avail or ""
+                    result["stock"] = "Unknown"
 
             if result.get("name"):
                 return result
@@ -223,7 +222,7 @@ def _from_html(soup: BeautifulSoup) -> dict:
             else:
                 result["stock"] = "In Stock"
         else:
-            result["stock"] = ""
+            result["stock"] = "Unknown"
 
     return result
 
@@ -279,47 +278,50 @@ def _extract_offers(html: str) -> dict:
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def extract_product(brand_name: str, product_url: str, html: str) -> dict:
+def _blank(val):
+    """Return val if truthy, else empty string (never None/null in output)."""
+    if val is None:
+        return ""
+    if isinstance(val, str) and val.strip() == "":
+        return ""
+    return val
+
+
+def extract_product(brand_name: str, source_brand_url: str,
+                    product_url: str, html: str) -> dict:
     """
     Extract product details from page HTML.
-    Returns a dict with all OUTPUT_COLUMNS keys.
+    Returns a dict keyed by OUTPUT_COLUMNS.
     """
     soup = BeautifulSoup(html, "html.parser")
 
-    # Try each strategy; merge with later strategies filling gaps
-    data: dict = {}
-
-    jld = _from_json_ld(soup)
-    shop = _from_shopify_meta(soup, html)
+    jld       = _from_json_ld(soup)
+    shop      = _from_shopify_meta(soup, html)
     html_data = _from_html(soup)
-    offers = _extract_offers(html)
+    offers    = _extract_offers(html)
 
     # Merge: JSON-LD wins, then Shopify meta, then HTML
-    name = jld.get("name") or shop.get("name") or html_data.get("name") or ""
+    name          = jld.get("name") or shop.get("name") or html_data.get("name") or ""
     selling_price = jld.get("selling_price") or shop.get("selling_price") or html_data.get("selling_price")
-    mrp = jld.get("mrp") or html_data.get("mrp")
-    stock = jld.get("stock") or html_data.get("stock") or ""
+    mrp           = jld.get("mrp") or html_data.get("mrp")
+    stock         = jld.get("stock") or html_data.get("stock") or "Unknown"
 
-    # If MRP not found separately but SP found, set MRP = SP (no discount)
-    if selling_price and not mrp:
-        mrp = selling_price
-
+    # Discount only when both prices present and MRP > SP
     discount = _discount(mrp, selling_price)
 
-    # Final price heuristic (selling price unless a prepaid discount bumps it down)
-    final_price = selling_price
+    # If MRP not found keep it blank, don't copy SP into it
+    mrp_out = mrp if mrp and mrp != selling_price else mrp
 
     return {
-        "Brand Name": brand_name,
-        "Product Name": name.strip(),
-        "Product URL": product_url,
-        "MRP": mrp,
-        "Selling Price": selling_price,
-        "Discount %": discount,
-        "Coupon Code": offers["coupon"],
-        "Prepaid Offer": offers["prepaid_offer"],
-        "Shipping Fee": offers["shipping_fee"],
-        "Final Price": final_price,
-        "Stock Status": stock,
-        "Scraped Timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "Brand Name":               brand_name,
+        "Source Brand URL":         source_brand_url,
+        "Product URL":              product_url,
+        "Product Name":             _blank(name.strip()),
+        "MRP":                      _blank(mrp_out),
+        "Selling Price / Final Price": _blank(selling_price),
+        "Discount %":               _blank(discount),
+        "Coupon Code":              _blank(offers["coupon"]),
+        "Prepaid Offer":            _blank(offers["prepaid_offer"]),
+        "Shipping Fee":             _blank(offers["shipping_fee"]),
+        "Availability / Stock Status": stock,
     }

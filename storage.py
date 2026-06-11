@@ -8,7 +8,6 @@ from pathlib import Path
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
-import pandas as pd
 
 import config
 
@@ -34,7 +33,8 @@ def save_results(records: list[dict], failed: list[dict]) -> None:
 def _save_products_csv(records: list[dict]) -> None:
     path = Path(config.OUTPUT_CSV)
     with path.open("w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=config.OUTPUT_COLUMNS)
+        writer = csv.DictWriter(f, fieldnames=config.OUTPUT_COLUMNS,
+                                extrasaction="ignore")
         writer.writeheader()
         writer.writerows(records)
 
@@ -102,7 +102,8 @@ def append_record(record: dict) -> None:
     path = Path(config.OUTPUT_CSV)
     write_header = not _csv_initialized or not path.exists()
     with path.open("a", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=config.OUTPUT_COLUMNS)
+        writer = csv.DictWriter(f, fieldnames=config.OUTPUT_COLUMNS,
+                                extrasaction="ignore")
         if write_header:
             writer.writeheader()
         writer.writerow(record)
