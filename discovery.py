@@ -18,17 +18,30 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Headers helper
+# ---------------------------------------------------------------------------
+
+def _make_headers(referer: str = "") -> dict:
+    headers = {**config.BASE_HEADERS, "User-Agent": random.choice(config.USER_AGENTS)}
+    if referer:
+        headers["Referer"] = referer
+        headers["Sec-Fetch-Site"] = "same-origin"
+    return headers
+
+
+# ---------------------------------------------------------------------------
 # Shared HTTP helper
 # ---------------------------------------------------------------------------
 
-def _get(url: str, session: requests.Session, stream=False) -> requests.Response | None:
-    """GET with retries and polite delay. Returns None on unrecoverable failure."""
+def _get(url: str, session: requests.Session, referer: str = "",
+         stream: bool = False) -> requests.Response | None:
+    """GET with retries, rotated UA, and polite delay."""
     for attempt in range(1, config.MAX_RETRIES + 1):
         try:
             time.sleep(random.uniform(config.MIN_DELAY, config.MAX_DELAY))
             resp = session.get(
                 url,
-                headers=config.HEADERS,
+                headers=_make_headers(referer),
                 timeout=config.REQUEST_TIMEOUT,
                 stream=stream,
                 allow_redirects=True,
@@ -37,9 +50,12 @@ def _get(url: str, session: requests.Session, stream=False) -> requests.Response
                 return resp
             if resp.status_code in (429, 503):
                 wait = 2 ** attempt
-                logger.warning("Rate-limited on %s. Waiting %ds…", url, wait)
+                logger.warning("Rate-limited on %s — waiting %ds…", url, wait)
                 time.sleep(wait)
-            elif resp.status_code in (403, 404, 410):
+            elif resp.status_code == 403:
+                logger.warning("HTTP 403 (bot-blocked) for %s", url)
+                return None
+            elif resp.status_code in (404, 410):
                 logger.debug("HTTP %d for %s — skipping.", resp.status_code, url)
                 return None
             else:
@@ -47,6 +63,25 @@ def _get(url: str, session: requests.Session, stream=False) -> requests.Response
         except requests.RequestException as exc:
             logger.warning("Request error for %s (attempt %d): %s", url, attempt, exc)
     return None
+
+
+# ---------------------------------------------------------------------------
+# Homepage warm-up — establishes cookies and looks like a real browser visit
+# ---------------------------------------------------------------------------
+
+def warmup(base_url: str, session: requests.Session) -> None:
+    logger.info("Warming up session on %s …", base_url)
+    try:
+        resp = session.get(
+            base_url,
+            headers=_make_headers(),
+            timeout=config.REQUEST_TIMEOUT,
+            allow_redirects=True,
+        )
+        logger.info("Warm-up: HTTP %d for %s", resp.status_code, base_url)
+        time.sleep(random.uniform(1.5, 3.0))
+    except Exception as exc:
+        logger.warning("Warm-up failed for %s: %s", base_url, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +115,7 @@ def _parse_sitemap(url: str, session: requests.Session, base_domain: str,
                    collected: set, depth=0):
     if depth > 4:
         return
-    resp = _get(url, session)
+    resp = _get(url, session, referer=f"https://{base_domain}/")
     if not resp:
         return
     try:
@@ -92,7 +127,8 @@ def _parse_sitemap(url: str, session: requests.Session, base_domain: str,
     for loc in soup.find_all("sitemap"):
         child_url = loc.find("loc")
         if child_url:
-            _parse_sitemap(child_url.text.strip(), session, base_domain, collected, depth + 1)
+            _parse_sitemap(child_url.text.strip(), session, base_domain,
+                           collected, depth + 1)
 
     # Regular sitemap URLs
     for loc in soup.find_all("url"):
@@ -132,7 +168,7 @@ def _discover_via_shopify(base_url: str, session: requests.Session,
     page = 1
     while True:
         url = f"{base_url.rstrip('/')}/products.json?limit=250&page={page}"
-        resp = _get(url, session)
+        resp = _get(url, session, referer=base_url)
         if not resp:
             break
         try:
@@ -187,12 +223,12 @@ def _discover_via_crawl(base_url: str, session: requests.Session,
     found: set = set()
     visited: set = set()
 
-    def crawl(url: str, depth: int):
+    def crawl(url: str, depth: int, referer: str = ""):
         norm = _normalise(url)
         if norm in visited or depth > 2:
             return
         visited.add(norm)
-        resp = _get(url, session)
+        resp = _get(url, session, referer=referer or base_url)
         if not resp:
             return
         for link in _extract_links(resp.text, base_url):
@@ -205,18 +241,15 @@ def _discover_via_crawl(base_url: str, session: requests.Session,
                 and not any(f in link.lower() for f in config.SKIP_PATH_FRAGMENTS)
                 and lnorm not in visited
             ):
-                # Only recurse into collection/category-like pages
                 path = urlparse(link).path.lower()
                 if any(kw in path for kw in ["/collection", "/category", "/shop", "/products"]):
-                    crawl(link, depth + 1)
+                    crawl(link, depth + 1, referer=url)
 
-    # Try known collection paths first
     for path in _COLLECTION_PATHS:
-        crawl(urljoin(base_url, path), depth=0)
+        crawl(urljoin(base_url, path), depth=0, referer=base_url)
         if len(found) >= (config.MAX_PRODUCTS_PER_BRAND or 500):
             break
 
-    # Also crawl homepage
     if not found:
         crawl(base_url, depth=0)
 
@@ -236,6 +269,9 @@ def discover_product_urls(brand_name: str, base_url: str,
     """
     base_domain = urlparse(base_url).netloc.replace("www.", "")
     logger.info("=== Discovering URLs for %s (%s) ===", brand_name, base_url)
+
+    # Warm up: visit homepage first to get cookies and look like a real browser
+    warmup(base_url, session)
 
     all_urls: set = set()
 

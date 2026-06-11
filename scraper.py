@@ -20,7 +20,7 @@ import requests
 import openpyxl
 
 import config
-from discovery import discover_product_urls
+from discovery import discover_product_urls, _make_headers
 from extractor import extract_product
 from storage import append_record, save_results
 
@@ -82,19 +82,22 @@ def fetch_product(brand_name: str, source_brand_url: str, url: str,
         time.sleep(random.uniform(config.MIN_DELAY, config.MAX_DELAY))
         resp = session.get(
             url,
-            headers=config.HEADERS,
+            headers=_make_headers(referer=source_brand_url),
             timeout=config.REQUEST_TIMEOUT,
             allow_redirects=True,
         )
     except requests.RequestException as exc:
         return None, str(exc)
 
+    if resp.status_code == 403:
+        return None, "HTTP 403 — bot-blocked by site WAF"
     if resp.status_code != 200:
         return None, f"HTTP {resp.status_code}"
 
     # Skip CAPTCHA / bot-detection pages (don't try to bypass)
     lower = resp.text.lower()
-    if any(kw in lower for kw in ["captcha", "robot", "access denied", "403 forbidden"]):
+    if any(kw in lower for kw in ["captcha", "just a moment", "enable javascript and cookies",
+                                   "access denied", "403 forbidden", "blocked"]):
         return None, "Blocked / CAPTCHA"
 
     try:
