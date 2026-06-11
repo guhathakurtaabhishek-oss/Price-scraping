@@ -19,6 +19,12 @@ from pathlib import Path
 import requests
 import openpyxl
 
+try:
+    import cloudscraper
+    _HAS_CLOUDSCRAPER = True
+except ImportError:
+    _HAS_CLOUDSCRAPER = False
+
 import config
 from discovery import discover_product_urls, _make_headers
 from extractor import extract_product
@@ -132,8 +138,15 @@ def main():
         brands = [b for b in brands if b["brand"].lower() in brand_filter]
         logger.info("Filtered to brands: %s", [b["brand"] for b in brands])
 
-    session = requests.Session()
-    session.headers.update(config.HEADERS)
+    if _HAS_CLOUDSCRAPER:
+        session = cloudscraper.create_scraper(
+            browser={"browser": "chrome", "platform": "windows", "mobile": False}
+        )
+        logger.info("Using cloudscraper (Cloudflare bypass enabled)")
+    else:
+        session = requests.Session()
+        logger.warning("cloudscraper not installed — falling back to plain requests")
+    session.headers.update(config.BASE_HEADERS)
 
     all_records: list[dict] = []
     all_failed:  list[dict] = []

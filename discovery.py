@@ -69,7 +69,7 @@ def _get(url: str, session: requests.Session, referer: str = "",
 # Homepage warm-up — establishes cookies and looks like a real browser visit
 # ---------------------------------------------------------------------------
 
-def warmup(base_url: str, session: requests.Session) -> None:
+def warmup(base_url: str, session) -> None:
     logger.info("Warming up session on %s …", base_url)
     try:
         resp = session.get(
