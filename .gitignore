@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.log
+products_output.xlsx
+products_output.csv
+failed_urls.csv
+*.egg-info/
+.env
