@@ -1,0 +1,8 @@
+Metric,EarnKaro,CashKaro,Notes
+Year_1_Total,1939200,823201,Sum of total monthly income for months 1-12
+Year_2_Total,1939200,916800,Sum of total monthly income for months 13-24
+Year_3_Total,1939200,916800,Sum of total monthly income for months 25-36
+Total_36_Month_Income,5817600,2656801,Cumulative income over 36 months
+Break_Even_Month,N/A,Never,Month when CK cumulative income >= EK cumulative income
+Peak_Monthly_CK_Income,N/A,76400,Highest CK_Total_Monthly_Income across 36 months (converges near 32400+44000=76400 at month 7+)
+Month_CK_Monthly_Exceeds_EK_Monthly,N/A,Never,Month when CK monthly income first exceeds EK monthly income
