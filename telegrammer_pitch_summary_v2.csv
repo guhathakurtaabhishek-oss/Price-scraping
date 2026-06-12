@@ -1,0 +1,7 @@
+Scenario,Rate_Per_Transaction,Year1_Income,Year2_Income,Year3_Income,Cumulative_36M,Breakeven_Monthly_Month,Breakeven_Cumulative_Month,Avg_CAC_Per_New_User,CashKaro_Margin_Per_Txn,Recommendation
+EarnKaro,60,1939200,1939200,1939200,5817600,N/A,N/A,N/A,N/A,Baseline
+Scenario A,6,823201,916800,916800,2656800,N/A,N/A,13,54,Low telegrammer incentive
+Scenario B,15,1374002,1499999,1500000,4374000,N/A,N/A,28,45,Viable - Year 2 break-even
+Scenario C,24,1924802,2083199,2083200,6091200,7,14,42,36,Competitive
+Scenario D,33,2475601,2666399,2666400,7808400,2,3,57,27,Recommended sweet spot
+Scenario E,42,3026402,3249597,3249600,9525600,1,1,72,18,CashKaro margin too thin
